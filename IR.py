@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from bokeh.plotting import figure
 import xlsxwriter
 import base64
@@ -11,16 +12,38 @@ from io import BytesIO
 def to_excel(df):
     output = BytesIO()
     writer = pd.ExcelWriter(output, engine='xlsxwriter')
-    df.to_excel(writer, sheet_name='sheet1',index = False)
-    workbook  = writer.book
-    worksheet = writer.sheets['sheet1']
+    df.to_excel(writer, sheet_name="計算後",index = False)
+    df0.to_excel(writer, sheet_name="生データ",index = False)
+    if functypes:
+        df2.to_excel(writer, sheet_name="官能基",index = False)
+        worksheet = writer.sheets["官能基"] 
+        worksheet.write('D1', "最小値")
+        worksheet.write('D2', y_min)
+        worksheet.write('E1', "最大値")
+        worksheet.write('E2', y_max)
+    workbook  = writer.book    
     chart = workbook.add_chart({'type': 'scatter', 'subtype': 'smooth'})#散布図・スムージング
 
+    if functypes:
+        df2.to_excel(writer, sheet_name="官能基",index = False)
+        worksheet = writer.sheets["官能基"] 
+        worksheet.write('D1', "最小値")
+        worksheet.write('D2', y_min)
+        worksheet.write('E1', "最大値")
+        worksheet.write('E2', y_max)
+        for index in range(1,len(df2)+1):
+            chart.add_series({'categories' : ["官能基", index, 1, index, 2],
+                              'values' : ["官能基", 1, 3, 1, 4],
+                              'line' : {'color': func_line_color, 'width': 1,'dash_type': funcstyle_dict[funcstyle_select]},
+                              'name' :["官能基", index, 0],
+                              })
+
+    worksheet = writer.sheets["計算後"]
     for index in range(1,len(files)+1):
-        chart.add_series({'categories' : ["sheet1", 1, 0, 3551, 0], #線の設定A2からA3552を選択
-                          'values' : ['sheet1', 1, index, 3551, index], 
+        chart.add_series({'categories' : ["計算後", 1, 0, 3551, 0], #線の設定A2からA3552を選択
+                          'values' : ["計算後", 1, index, 3551, index], 
                           'line' : {'color': 'black', 'width': 1},
-                          'name' :["sheet1", 0, index],
+                          'name' :["計算後", 0, index],
                           })
 
     chart.set_size({'width': width, 'height': height}) #外枠のサイズ設定
@@ -65,7 +88,7 @@ def get_table_download_link(df):
     """
     val = to_excel(df)
     b64 = base64.b64encode(val)  # val looks like b'...'
-    return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="IR.xlsx">ここをクリック</a>' # decode b'abc' => abc
+    return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="IR.xlsx">ここをクリックしダウンロード</a>' # decode b'abc' => abc
 #ファイルから波長を取り出す
 def Extraction(file):
   df = pd.read_csv(file,skiprows=1,nrows=3551)
@@ -79,7 +102,7 @@ def Standardization(wave_max,wave_min):
   return standards
 
 
-files = st.sidebar.file_uploader("ファイルを選択",accept_multiple_files = True)
+files = st.sidebar.file_uploader("CSVファイルを選択",accept_multiple_files = True)
 #####生データ読み込み####
 #吸光度をDataFrame化
 ys = pd.DataFrame()
@@ -124,6 +147,9 @@ height = expander_prop.number_input("高さ", value = 500,step = 25)
 width = expander_prop.number_input("幅", value = 450,step = 25)
 frame_border = expander_prop.checkbox('枠線(枠線付きで保存される)')
 
+expander_save = st.sidebar.beta_expander("保存",expanded = True)
+save = expander_save.button("エクセルファイルを生成")
+
 ####ファイルが選択されたら実行される####
 if len(files) > 0:
     ####加工####
@@ -150,7 +176,35 @@ if len(files) > 0:
     ys = (ys -baselines) / standards - intervals + individuals
     df = pd.concat([x,ys],axis=1)
 
-    
+    functypes = st.selectbox("",["官能基なし","官能基を追加"])
+    if functypes =="官能基を追加":
+        func_n = st.number_input("追加する数",min_value=1,value=1)
+        df2 = pd.DataFrame(index=range(func_n), columns=["官能基","波長1","波長2"])
+        for i in range(func_n):
+            col1,col2 = st.beta_columns([5,3])
+            df2.iloc[i,0] = col1.text_input("官能基名(凡例)",key=i)
+            df2.iloc[i,1:3] = col2.number_input("波長",min_value=450,max_value=4000,key=i)
+        col1,col2 = st.beta_columns([5,2])
+        funcstyle_dict = {"――――― (solid)":"solid",
+                          "・・・・・ (round_dot)":"round_dot",
+                          "▪▪▪▪▪ (square_dot)":"square_dot",
+                          "ーーーーー (dash)":"dash",
+                          "ー・ー・ー・ー (dash_dot)":"dash_dot",
+                          "―― ―― ―― (long_dash)":"long_dash",
+                          "―― ・ ――   (long_dash_dot)":"long_dash_do",
+                          "―― ・・ ―― (long_dash_dot_dot)":"long_dash_dot_dot"}
+        funcstyle_select = col1.selectbox("線のスタイル(Excelでのスタイル,Web上での見た目は変わらない)",["――――― (solid)",
+                                                   "・・・・・ (round_dot)",
+                                                   "▪▪▪▪▪ (square_dot)",
+                                                   "ーーーーー (dash)",
+                                                   "ー・ー・ー・ー (dash_dot)",
+                                                   "―― ―― ―― (long_dash)",
+                                                   "―― ・ ――   (long_dash_dot)",
+                                                   "―― ・・ ―― (long_dash_dot_dot)"],index=3)
+        func_line_color = col2.color_picker("線色",value ="#FFC000")
+        df2['官能基'].replace('', np.nan, inplace=True)#"入力されていない官能基をNaNにする"
+        df2 = df2.dropna()#NaNになっている列を削除
+
 
     ####グラフ描写####
     y_min = round(ys.min()[len(files)-1], -1)-10 #yの最小値を計算
@@ -163,13 +217,20 @@ if len(files) > 0:
             y_range = [y_min,y_max],
             plot_width = width , 
             plot_height = height)
-
-
+ 
     for file_name in file_names: 
         p.line(x=x["cm-1"],y=ys[file_name],
                line_width = 1,
                line_color = "black",
                legend = file_name)
+
+    if functypes =="官能基を追加":
+        for index in range(len(df2)): #官能基の追加
+            p.line(x=df2.iloc[index,1:3],y=[y_min,y_max],
+                   line_width = 1,
+                   line_color = func_line_color,
+                   line_dash = 'dashdot',
+                   legend = df2.iloc[index][0])
 
     p.legend.click_policy = "hide"
 
@@ -178,9 +239,10 @@ if len(files) > 0:
 
     st.bokeh_chart(p)
 
+
     #エクセルファイルをダウンロード
-    st.sidebar.markdown("**エクセルファイルをダウンロード**")
-    st.sidebar.markdown(get_table_download_link(df), unsafe_allow_html=True)
+    if save:
+        st.sidebar.markdown(get_table_download_link(df), unsafe_allow_html=True)
 
 ####使い方####
 '''
