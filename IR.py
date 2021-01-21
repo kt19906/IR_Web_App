@@ -14,7 +14,7 @@ def to_excel(df):
     writer = pd.ExcelWriter(output, engine='xlsxwriter')
     df.to_excel(writer, sheet_name="計算後",index = False)
     df0.to_excel(writer, sheet_name="生データ",index = False)
-    if functypes:
+    if functypes=="官能基を追加":
         df2.to_excel(writer, sheet_name="官能基",index = False)
         worksheet = writer.sheets["官能基"] 
         worksheet.write('D1', "最小値")
@@ -24,7 +24,7 @@ def to_excel(df):
     workbook  = writer.book    
     chart = workbook.add_chart({'type': 'scatter', 'subtype': 'smooth'})#散布図・スムージング
 
-    if functypes:
+    if functypes=="官能基を追加":
         df2.to_excel(writer, sheet_name="官能基",index = False)
         worksheet = writer.sheets["官能基"] 
         worksheet.write('D1', "最小値")
